@@ -1,7 +1,8 @@
 from flask_blog import app, bcrypt, db
-from flask import render_template, redirect, flash, url_for
-from flask_blog.forms import RegistrationForm, LoginForm
+from flask import render_template, redirect, flash, url_for, request
+from flask_blog.forms import RegistrationForm, LoginForm, UpdateAccountForm
 from flask_blog.models import User, Post
+from flask_login import login_user, current_user, logout_user, login_required
 
 posts = [
     {
@@ -31,6 +32,8 @@ def about():
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
+    # if current_user.is_authenticated:
+    #     return redirect(url_for('home'))
     form = RegistrationForm()
     if form.validate_on_submit():
         hashed_pw = bcrypt.generate_password_hash(form.password.data).decode('utf-8')
@@ -44,11 +47,29 @@ def register():
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    # if current_user.is_authenticated:
+    #     return redirect(url_for('home'))
     form = LoginForm()
     if form.validate_on_submit():
-        if form.email.data == 'admin@blog.com' and form.password.data == 'password':
-            flash('You have been logged in!', 'success')
-            return redirect(url_for('home'))
+        user = User.query.filter_by(email=form.email.data).first()
+        if user and bcrypt.check_password_hash(user.password, form.password.data):
+            login_user(user, remember=form.remember.data)
+            next_page = request.args.get('next')
+            return redirect(next_page) if next_page else redirect(url_for('home'))
         else:
             flash('Login Unsuccessfull', 'danger')
     return render_template('login.html', title='Login', form=form)
+
+
+@app.route('/logout')
+def logout():
+    logout_user()
+    return redirect(url_for('home'))
+
+
+@app.route('/account')
+@login_required
+def account():
+    form = UpdateAccountForm()
+    image_file = url_for('static', filename=f'profile_pics/{current_user.image_file}')
+    return render_template('account.html', title='Account', image_file=image_file, form=form)
